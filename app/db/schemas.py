@@ -1,3 +1,5 @@
+# app/db/schemas.py
+
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import List, Dict, Union
@@ -14,10 +16,11 @@ class User(UserBase):
     name: str
 
     class Config:
+        orm_mode = True
         from_attributes = True
 
 class Field(BaseModel):
-    field_id: str
+    field_id: int
     type: str
     label: str
     required: bool
@@ -26,15 +29,25 @@ class FormBase(BaseModel):
     title: str
     description: str
 
-class FormCreate(FormBase):
-    fields: List[Field]
+class FieldCreate(BaseModel):
+    field_id: int
+    field_type: str
+    label: str
+    type: str
+    required: bool
 
-class Form(FormBase):
+class FormCreate(FormBase):
+    fields: List[FieldCreate]
+
+class Form(BaseModel):
     id: int
-    created_at: datetime
+    title: str
+    description: str
     owner_id: int
+    created_at: datetime
 
     class Config:
+        orm_mode = True
         from_attributes = True
 
 class FormSubmissionCreate(BaseModel):
