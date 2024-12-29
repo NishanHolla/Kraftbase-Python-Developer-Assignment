@@ -2,11 +2,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from fastapi_login import LoginManager
+from app.core.config import settings
 from ..core import security
 from ..db import schemas, models, session, functions
 from typing import List
+from jose import jwt, JWTError
 
 router = APIRouter()
 
@@ -19,13 +21,20 @@ def get_db():
         db.close()
 
 # Initialize LoginManager
-SECRET = "tDThAIhYOqxmxgiBWx-IG3ZxBDNaIslGQPABVN8pOdo"
+SECRET = settings.secret_key
+print("Initializing LoginManager with SECRET:", SECRET)  # Debugging print
 manager = LoginManager(SECRET, token_url='/auth/login')
 
+# Define and register the user_loader callback
 @manager.user_loader
-def get_user(email: str):
-    db = next(get_db())
-    user = db.query(models.User).filter(models.User.email == email).first()
+def load_user(email: str):
+    print("user_loader called with email:", email)  # Debugging print
+    db = session.SessionLocal()
+    try:
+        user = db.query(models.User).filter(models.User.email == email).first()
+    finally:
+        db.close()
+    print("Loaded user:", user)  # Debugging print
     return user
 
 def get_user_with_db(email: str, db: Session):
@@ -57,11 +66,37 @@ def logout_user(response: Response):
     response.delete_cookie(key="access_token")
     return {"msg": "Successfully logged out"}
 
-# Create a Form Endpoint
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
 @router.post("/forms/create", response_model=schemas.Form)
-def create_form(form: schemas.FormCreate, user: models.User = Depends(manager), db: Session = Depends(get_db)):
-    db_form = functions.create_form(db, form, user.id)
-    return db_form
+def create_form(
+    form: schemas.FormCreate, 
+    token: str = Depends(oauth2_scheme), 
+    db: Session = Depends(get_db)
+):
+    try:
+        # Decode the token and fetch the user
+        payload = jwt.decode(token, SECRET, algorithms=["HS256"])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication token")
+        
+        # Load the user from the database
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        # Proceed with form creation
+        print("Form data:", form)
+        print("User details:", user)
+        db_form = functions.create_form(db, form, user.id)
+        print("Form created successfully:", db_form)
+        return db_form
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+    except Exception as e:
+        print("Error creating form:", e)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 # Delete a Form Endpoint
 @router.delete("/forms/delete/{form_id}", response_model=schemas.Form)
