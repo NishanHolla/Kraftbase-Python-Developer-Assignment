@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     postgres_db: str
     postgres_port: int
     database_url: str
-    secret_key: str  # Add this line
+    secret_key: str  # Ensure this field is included
 
     class Config:
         env_file = ".env"

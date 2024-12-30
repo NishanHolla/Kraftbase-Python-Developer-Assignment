@@ -35,7 +35,7 @@ class Form(Base):
     title = Column(String, index=True)
     description = Column(Text)
     owner_id = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime(timezone=True), default=func.now())  # Handle default value manually
+    created_at = Column(DateTime(timezone=True), default=func.now())  # Manually set the datetime
 
     owner = relationship("User", back_populates="forms")
     fields = relationship("Field", back_populates="form")

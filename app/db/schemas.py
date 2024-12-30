@@ -16,10 +16,11 @@ class User(UserBase):
     name: str
 
     class Config:
+        orm_mode = True
         from_attributes = True
 
 class Field(BaseModel):
-    field_id: int  # Change to int to match FieldCreate
+    field_id: int
     type: str
     label: str
     required: bool
@@ -49,14 +50,26 @@ class Form(BaseModel):
         orm_mode = True
         from_attributes = True
 
+class FormSubmissionBase(BaseModel):
+    form_id: int
+    data: List[Dict[str, Union[str, int, bool]]]  # Change to List of Dicts
+
 class FormSubmissionCreate(BaseModel):
     responses: List[Dict[str, Union[str, int, bool]]]
+
+class FormSubmission(FormSubmissionBase):
+    id: int
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
 
 class PaginatedSubmissions(BaseModel):
     total_count: int
     page: int
     limit: int
-    submissions: List[Dict[str, Union[str, int, bool]]]
+    submissions: List[FormSubmission]
 
     class Config:
+        orm_mode = True
         from_attributes = True
