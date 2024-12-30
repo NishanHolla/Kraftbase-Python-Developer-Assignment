@@ -162,9 +162,12 @@ def get_form_submissions(form_id: int, page: int = 1, limit: int = 10, db: Sessi
     submissions = db.query(models.FormSubmission).filter(models.FormSubmission.form_id == form_id).offset(offset).limit(limit).all()
     total_count = db.query(models.FormSubmission).filter(models.FormSubmission.form_id == form_id).count()
     
+    # Convert SQLAlchemy models to Pydantic models
+    pydantic_submissions = [schemas.FormSubmission.from_orm(submission) for submission in submissions]
+    
     return schemas.PaginatedSubmissions(
         total_count=total_count,
         page=page,
         limit=limit,
-        submissions=submissions
+        submissions=pydantic_submissions
     )
