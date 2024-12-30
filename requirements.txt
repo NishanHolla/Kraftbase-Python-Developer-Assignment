@@ -5,3 +5,7 @@ psycopg2
 pydantic[email]
 fastapi-login
 python-dotenv
+pydantic-settings
+passlib[bcrypt]
+python-jose
+python-multipart
