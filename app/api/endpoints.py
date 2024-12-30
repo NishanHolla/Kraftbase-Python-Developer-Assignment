@@ -9,7 +9,7 @@ from ..core import security
 from ..db import schemas, models, session, functions
 from typing import List
 from jose import jwt, JWTError
-from datetime import datetime
+from datetime import datetime, timedelta
 
 router = APIRouter()
 
@@ -50,16 +50,20 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     new_user = functions.create_user(db, user)
     return new_user
 
-# User Login Endpoint
 @router.post("/auth/login")
 def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = get_user_with_db(form_data.username, db)
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid credentials")
-    access_token = manager.create_access_token(
-        data={"sub": user.email}
+    
+    # Set token expiration to 2 hours
+    access_token_expires = timedelta(hours=2)
+    access_token = security.create_access_token(
+        data={"sub": user.email},
+        expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token }
+
 
 # User Logout Endpoint (example using cookie-based sessions)
 @router.post("/auth/logout")
@@ -99,13 +103,30 @@ def create_form(
 
 # Delete a Form Endpoint
 @router.delete("/forms/delete/{form_id}", response_model=schemas.Form)
-def delete_form(form_id: int, user: models.User = Depends(manager), db: Session = Depends(get_db)):
-    db_form = db.query(models.Form).filter(models.Form.id == form_id, models.Form.owner_id == user.id).first()
-    if not db_form:
-        raise HTTPException(status_code=404, detail="Form not found or not authorized")
-    db.delete(db_form)
-    db.commit()
-    return db_form
+def delete_form(form_id: int, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, SECRET, algorithms=["HS256"])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication token")
+        
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        db_form = db.query(models.Form).filter(models.Form.id == form_id, models.Form.owner_id == user.id).first()
+        if not db_form:
+            raise HTTPException(status_code=404, detail="Form not found or not authorized")
+
+        db.delete(db_form)
+        db.commit()
+        print("Form deleted:", db_form)  # Debugging print
+        return db_form
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+    except Exception as e:
+        print("Error deleting form:", e)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 # Get All Forms Endpoint
 @router.get("/forms/", response_model=List[schemas.Form])
